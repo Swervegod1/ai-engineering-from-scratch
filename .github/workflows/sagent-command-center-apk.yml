@@ -1,0 +1,50 @@
+name: SAgent Command Center Android APK
+on:
+  push:
+    branches: [sagent-command-center-apk]
+    paths:
+      - 'sagent-apk/**'
+      - '.github/workflows/sagent-command-center-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout isolated branch
+        uses: actions/checkout@v4
+      - name: Restore original Android source
+        shell: bash
+        run: |
+          base64 -d sagent-apk/android-src.tar.gz.base64 > "$RUNNER_TEMP/android-src.tar.gz"
+          echo "ceec2e244b2a099244a242cfeac317bd8b2a0f994b722c5d2131e02e2164e6b0  $RUNNER_TEMP/android-src.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/android-src.tar.gz"
+          test -f android/settings.gradle.kts
+      - name: Configure JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK and build tools
+        uses: android-actions/setup-android@v3
+      - name: Install Android platform
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Configure Gradle 8.10.2
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Compile and sign debug APK
+        working-directory: android
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+      - name: Upload installable test APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SAgent-Command-Center-debug-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
